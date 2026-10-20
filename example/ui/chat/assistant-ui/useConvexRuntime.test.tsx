@@ -254,13 +254,14 @@ describe("useConvexRuntime", () => {
       },
     );
     Element.prototype.scrollTo = () => {};
-    const { result } = renderHook(() => useConvexRuntime("thread-1"));
+    const { result, rerender } = renderHook(() => useConvexRuntime("thread-1"));
     render(
       <AssistantRuntimeProvider runtime={result.current}>
         <Thread />
       </AssistantRuntimeProvider>,
     );
-    expect(screen.getAllByText(/Needs approval/)).toHaveLength(2);
+    expect(screen.getByText("deleteFile · Needs approval")).toBeDefined();
+    expect(screen.getByText("transferMoney · Needs approval")).toBeDefined();
     fireEvent.click(screen.getAllByRole("button", { name: "Deny" })[1]);
     await waitFor(() =>
       expect(submitApproval()).toHaveBeenCalledWith({
@@ -269,6 +270,25 @@ describe("useConvexRuntime", () => {
         approved: false,
       }),
     );
+
+    const [deleteFile, transferMoney] = awaitingApprovals.parts;
+    mocks.messages = [
+      {
+        ...awaitingApprovals,
+        parts: [
+          {
+            ...deleteFile,
+            state: "approval-responded",
+            approval: { id: "approval-1", approved: true },
+          } as UIMessage["parts"][number],
+          transferMoney,
+        ],
+      },
+    ];
+    act(() => rerender());
+    expect(screen.getByText("deleteFile · Approved")).toBeDefined();
+    expect(screen.getByText("transferMoney · Needs approval")).toBeDefined();
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(1);
   });
 
   it("does not continue when an approval fails to save", async () => {

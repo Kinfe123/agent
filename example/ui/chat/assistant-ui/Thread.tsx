@@ -171,18 +171,7 @@ function ToolCall({
       className="not-prose rounded-lg border p-3 text-sm"
     >
       <summary className="cursor-pointer font-medium">
-        {toolName} ·{" "}
-        {awaitingApproval
-          ? "Needs approval"
-          : approval?.approved === false
-            ? `Denied${approval.reason ? `: ${approval.reason}` : ""}`
-            : isError
-              ? "Failed"
-              : result !== undefined
-                ? "Complete"
-                : approval?.approved || status.type === "running"
-                  ? "Running…"
-                  : "Stopped"}
+        {toolName} · {toolStatus({ result, isError, status, approval })}
       </summary>
       <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs text-slate-600">
         {argsText}
@@ -217,6 +206,26 @@ function ToolCall({
       )}
     </details>
   );
+}
+
+function toolStatus({
+  result,
+  isError,
+  status,
+  approval,
+}: Pick<
+  ToolCallMessagePartProps,
+  "result" | "isError" | "status" | "approval"
+>) {
+  if (approval?.approved === false) {
+    return `Denied${approval.reason ? `: ${approval.reason}` : ""}`;
+  }
+  if (isError) return "Failed";
+  if (result !== undefined) return "Complete";
+  if (status.type === "running") return "Running…";
+  if (status.type === "incomplete") return "Stopped";
+  if (approval?.approved) return "Approved";
+  return approval ? "Needs approval" : "Stopped";
 }
 
 function MarkdownText() {
