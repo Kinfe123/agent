@@ -24,14 +24,13 @@ export function useConvexRuntime(threadId: string) {
   const submitApproval = useMutation(api.chat.approval.submitApproval);
   const abortStream = useMutation(api.chat.streamAbort.abortStreamByOrder);
   const latest = results.findLast((message) => message.role === "assistant");
-  const pendingApprovals = pendingApprovalIds(latest);
 
   return useExternalStoreRuntime({
     messages: results,
     convertMessage,
     isLoading: status === "LoadingFirstPage",
     isDisabled: status === "LoadingFirstPage",
-    isSendDisabled: pendingApprovals.length > 0,
+    isSendDisabled: pendingApprovalIds(latest).length > 0,
     isRunning: latest?.status === "pending" || latest?.status === "streaming",
     hasEarlier: status === "CanLoadMore",
     onLoadEarlier: async () => loadMore(10),

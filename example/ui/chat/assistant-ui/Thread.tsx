@@ -223,9 +223,10 @@ function toolStatus({
   if (isError) return "Failed";
   if (result !== undefined) return "Complete";
   if (status.type === "running") return "Running…";
-  if (status.type === "incomplete") return "Stopped";
-  if (approval?.approved) return "Approved";
-  return approval ? "Needs approval" : "Stopped";
+  if (approval && status.type !== "incomplete") {
+    return approval.approved ? "Approved" : "Needs approval";
+  }
+  return "Stopped";
 }
 
 function MarkdownText() {
