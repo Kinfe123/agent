@@ -153,16 +153,20 @@ function ToolCall({
   respondToApproval,
 }: ToolCallMessagePartProps) {
   const [error, setError] = useState<string>();
+  const [responding, setResponding] = useState(false);
   const awaitingApproval =
     approval !== undefined &&
     approval.approved === undefined &&
     approval.resolution === undefined;
   const respond = async (response: ToolApprovalResponse) => {
     setError(undefined);
+    setResponding(true);
     try {
       await respondToApproval(response);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setResponding(false);
     }
   };
   return (
@@ -186,14 +190,16 @@ function ToolCall({
           <button
             type="button"
             onClick={() => void respond({ approved: true })}
-            className="rounded-md bg-indigo-600 px-3 py-1 text-white"
+            disabled={responding}
+            className="rounded-md bg-indigo-600 px-3 py-1 text-white disabled:opacity-50"
           >
             Approve
           </button>
           <button
             type="button"
             onClick={() => void respond({ approved: false })}
-            className="rounded-md border px-3 py-1"
+            disabled={responding}
+            className="rounded-md border px-3 py-1 disabled:opacity-50"
           >
             Deny
           </button>
@@ -226,7 +232,7 @@ function toolStatus({
   if (approval && status.type !== "incomplete") {
     return approval.approved ? "Approved" : "Needs approval";
   }
-  return "Stopped";
+  return status.type === "complete" ? "Complete" : "Stopped";
 }
 
 function MarkdownText() {
