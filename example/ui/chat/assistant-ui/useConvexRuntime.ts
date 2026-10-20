@@ -1,86 +1,78 @@
-import { useExternalStoreRuntime } from "@assistant-ui/react";
-import { useUIMessages } from "@convex-dev/agent/react";
-import { useAction, useMutation } from "convex/react";
-import { useRef, useState } from "react";
+import {
+  MessageNotSentError,
+  useExternalStoreRuntime,
+} from "@assistant-ui/react";
+import {
+  optimisticallySendMessage,
+  useUIMessages,
+} from "@convex-dev/agent/react";
+import { useMutation } from "convex/react";
+import { useRef } from "react";
 import { api } from "../../../convex/_generated/api";
-import { convertMessage } from "./convertMessage";
+import { convertMessage, pendingApprovalIds } from "./convertMessage";
 
 export function useConvexRuntime(threadId: string) {
   const { results, status, loadMore } = useUIMessages(
-    api.chat.streaming.listThreadMessages,
+    api.chat.approval.listThreadMessages,
     { threadId },
     { initialNumItems: 10, stream: true },
   );
-  const sendMessage = useAction(api.chat.streaming.streamOneShot);
-  const abortStream = useMutation(api.chat.streamAbort.abortStreamByOrder);
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<{ message: string; prompt?: string }>();
-  const cancelled = useRef(false);
-  const streamingMessage = results.findLast(
-    (message) => message.role === "assistant" && message.status === "streaming",
+  const sendMessage = useMutation(
+    api.chat.approval.sendMessage,
+  ).withOptimisticUpdate(
+    optimisticallySendMessage(api.chat.approval.listThreadMessages),
   );
+  const submitApproval = useMutation(api.chat.approval.submitApproval);
+  const triggerContinuation = useMutation(
+    api.chat.approval.triggerContinuation,
+  );
+  const abortStream = useMutation(api.chat.streamAbort.abortStreamByOrder);
+  const answeredApprovals = useRef(new Set<string>());
+  const latest = results.findLast((message) => message.role === "assistant");
+  const pendingApprovals = pendingApprovalIds(latest);
 
-  const runtime = useExternalStoreRuntime({
+  return useExternalStoreRuntime({
     messages: results,
     convertMessage,
     isLoading: status === "LoadingFirstPage",
     isDisabled: status === "LoadingFirstPage",
-    isRunning:
-      isSending ||
-      results.some(
-        (message) =>
-          message.role === "assistant" &&
-          (message.status === "pending" || message.status === "streaming"),
-      ),
-    onNew: async (message) => {
-      if (
-        message.attachments?.length ||
-        message.content.some((part) => part.type !== "text")
-      ) {
-        throw new Error("This example accepts text messages only.");
+    isSendDisabled: pendingApprovals.length > 0,
+    isRunning: latest?.status === "pending" || latest?.status === "streaming",
+    hasEarlier: status === "CanLoadMore",
+    onLoadEarlier: async () => loadMore(10),
+    onNew: async ({ content: [part, ...rest] }) => {
+      if (part?.type !== "text" || rest.length) {
+        throw new MessageNotSentError("This example accepts text only.");
       }
-      const prompt = message.content
-        .map((part) => (part.type === "text" ? part.text : ""))
-        .join("\n");
-      setError(undefined);
-      setIsSending(true);
-      cancelled.current = false;
       try {
-        // This action resolves after the stream and final message are persisted.
-        await sendMessage({ threadId, prompt });
+        await sendMessage({ threadId, prompt: part.text });
       } catch (cause) {
-        if (!cancelled.current) {
-          setError({
-            message:
-              cause instanceof Error
-                ? cause.message
-                : "Unable to send the message.",
-            prompt,
-          });
-        }
-      } finally {
-        setIsSending(false);
+        throw new MessageNotSentError(String(cause));
       }
     },
-    ...(streamingMessage
+    onRespondToToolApproval: async ({ approvalId, approved, reason }) => {
+      const { messageId } = await submitApproval({
+        threadId,
+        approvalId,
+        approved,
+        reason,
+      });
+      // Approvals in a step are answered one at a time; generation continues
+      // from the last response, once every request in the step has one.
+      answeredApprovals.current.add(approvalId);
+      if (pendingApprovals.every((id) => answeredApprovals.current.has(id))) {
+        await triggerContinuation({
+          threadId,
+          lastApprovalMessageId: messageId,
+        });
+      }
+    },
+    ...(latest?.status === "streaming"
       ? {
           onCancel: async () => {
-            cancelled.current = true;
-            try {
-              await abortStream({ threadId, order: streamingMessage.order });
-            } catch (cause) {
-              cancelled.current = false;
-              setError({
-                message:
-                  cause instanceof Error
-                    ? cause.message
-                    : "Unable to stop the response.",
-              });
-            }
+            await abortStream({ threadId, order: latest.order });
           },
         }
       : {}),
   });
-
-  return { runtime, error, paginationStatus: status, loadMore };
 }

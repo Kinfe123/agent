@@ -27,15 +27,11 @@ vi.mock("../hooks/use-demo-thread", async (importOriginal) => ({
 }));
 vi.mock("./assistant-ui/useConvexRuntime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./assistant-ui/useConvexRuntime")>()),
-  useConvexRuntime: () => ({
-    runtime: useExternalStoreRuntime({
+  useConvexRuntime: () =>
+    useExternalStoreRuntime({
       messages: mocks.messages,
       onNew: async () => {},
     }),
-    error: undefined,
-    paginationStatus: "Exhausted",
-    loadMore: () => {},
-  }),
 }));
 vi.mock("./assistant-ui/Thread", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./assistant-ui/Thread")>()),

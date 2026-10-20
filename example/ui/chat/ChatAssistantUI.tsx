@@ -26,8 +26,7 @@ function Conversation({
   threadId: string;
   resetThread: () => Promise<void>;
 }) {
-  const { runtime, error, paginationStatus, loadMore } =
-    useConvexRuntime(threadId);
+  const runtime = useConvexRuntime(threadId);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [newThreadError, setNewThreadError] = useState<string>();
 
@@ -53,7 +52,7 @@ function Conversation({
         <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
           <div>
             <h1 className="text-lg font-semibold text-slate-900">
-              Story Agent
+              Approval Agent
             </h1>
             <p className="text-sm text-slate-500">
               Convex Agent + assistant-ui
@@ -79,26 +78,7 @@ function Conversation({
             {newThreadError}
           </p>
         )}
-        {error && (
-          <div
-            role="alert"
-            className="mx-auto w-full max-w-3xl px-4 py-3 text-sm text-red-700"
-          >
-            <p>{error.message}</p>
-            {error.prompt && (
-              <AuiIf condition={(s) => !s.thread.isRunning && !s.composer.text}>
-                <button
-                  type="button"
-                  className="mt-2 underline"
-                  onClick={() => runtime.thread.composer.setText(error.prompt!)}
-                >
-                  Restore message to composer
-                </button>
-              </AuiIf>
-            )}
-          </div>
-        )}
-        <Thread paginationStatus={paginationStatus} loadMore={loadMore} />
+        <Thread />
       </div>
     </AssistantRuntimeProvider>
   );

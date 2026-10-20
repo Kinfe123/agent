@@ -113,8 +113,8 @@ function Index() {
               assistant-ui Chat
             </Link>
             <p className="mt-2 text-gray-700">
-              A composable chat interface with streamed Markdown, tool results,
-              conversation history, and cancellation, powered by Convex Agent.
+              The tool approval agent in an assistant-ui chat, with streaming,
+              approvals, history, and cancellation.
             </p>
           </li>
           <li className="border rounded-sm p-4 hover:shadow-sm transition">

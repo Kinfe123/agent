@@ -5,19 +5,14 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
   type ReasoningMessagePartProps,
+  type ToolApprovalResponse,
   type ToolCallMessagePartProps,
 } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
-import type { PaginationStatus } from "convex/react";
 import { ArrowDown, ArrowUp, Check, Copy, Square } from "lucide-react";
+import { useState } from "react";
 
-export function Thread({
-  paginationStatus,
-  loadMore,
-}: {
-  paginationStatus: PaginationStatus;
-  loadMore: (count: number) => void;
-}) {
+export function Thread() {
   return (
     <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
       <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-6">
@@ -27,42 +22,35 @@ export function Thread({
               Loading conversation…
             </p>
           </AuiIf>
-          {paginationStatus === "CanLoadMore" ||
-          paginationStatus === "LoadingMore" ? (
-            <button
-              type="button"
-              disabled={paginationStatus === "LoadingMore"}
-              onClick={() => loadMore(10)}
-              className="self-center rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
-            >
-              {paginationStatus === "LoadingMore"
-                ? "Loading…"
-                : "Load earlier messages"}
-            </button>
-          ) : null}
-          <ThreadPrimitive.Empty>
+          <AuiIf condition={(s) => s.thread.hasEarlier}>
+            <ThreadPrimitive.LoadEarlier className="self-center rounded-lg border px-4 py-2 text-sm">
+              Load earlier messages
+            </ThreadPrimitive.LoadEarlier>
+          </AuiIf>
+          <AuiIf condition={(s) => s.thread.isEmpty}>
             <div className="my-auto space-y-3 py-12 text-center">
               <h2 className="text-2xl font-semibold text-slate-900">
-                Every story starts somewhere.
+                Tools that ask first.
               </h2>
               <p className="text-slate-500">
-                Give the story agent a setting, a character, or a twist.
+                Ask the agent to delete a file, transfer money, or check a
+                balance.
               </p>
               <ThreadPrimitive.Suggestion
-                prompt="Use your character names tool, then tell me a short story about a lighthouse that remembers its visitors."
+                prompt="Delete the file important.txt and transfer $500 to account savings-123"
                 send
                 className="mx-auto mt-4 block max-w-sm rounded-xl border px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
               >
-                Tell me a story about a mysterious lighthouse
+                Delete important.txt and transfer $500
               </ThreadPrimitive.Suggestion>
             </div>
-          </ThreadPrimitive.Empty>
+          </AuiIf>
           <ThreadPrimitive.Messages
             components={{ UserMessage, AssistantMessage }}
           />
           <AuiIf condition={(s) => s.thread.isRunning}>
             <p role="status" className="pb-2 text-sm text-slate-500">
-              Writing your story…
+              Working…
             </p>
           </AuiIf>
         </div>
@@ -77,7 +65,7 @@ export function Thread({
             <ComposerPrimitive.Input
               autoFocus
               aria-label="Message"
-              placeholder="Describe your story…"
+              placeholder="Ask the agent to do something…"
               rows={1}
               className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 outline-none"
             />
@@ -161,18 +149,40 @@ function ToolCall({
   result,
   isError,
   status,
+  approval,
+  respondToApproval,
 }: ToolCallMessagePartProps) {
+  const [error, setError] = useState<string>();
+  const awaitingApproval =
+    approval !== undefined &&
+    approval.approved === undefined &&
+    approval.resolution === undefined;
+  const respond = async (response: ToolApprovalResponse) => {
+    setError(undefined);
+    try {
+      await respondToApproval(response);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
   return (
-    <details className="not-prose rounded-lg border p-3 text-sm">
+    <details
+      open={awaitingApproval}
+      className="not-prose rounded-lg border p-3 text-sm"
+    >
       <summary className="cursor-pointer font-medium">
         {toolName} ·{" "}
-        {isError
-          ? "Failed"
-          : result !== undefined
-            ? "Complete"
-            : status.type === "running"
-              ? "Running…"
-              : "Stopped"}
+        {awaitingApproval
+          ? "Needs approval"
+          : approval?.approved === false
+            ? `Denied${approval.reason ? `: ${approval.reason}` : ""}`
+            : isError
+              ? "Failed"
+              : result !== undefined
+                ? "Complete"
+                : approval?.approved || status.type === "running"
+                  ? "Running…"
+                  : "Stopped"}
       </summary>
       <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs text-slate-600">
         {argsText}
@@ -181,6 +191,29 @@ function ToolCall({
         <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs text-slate-600">
           {JSON.stringify(result, null, 2)}
         </pre>
+      )}
+      {awaitingApproval && (
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => void respond({ approved: true })}
+            className="rounded-md bg-indigo-600 px-3 py-1 text-white"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            onClick={() => void respond({ approved: false })}
+            className="rounded-md border px-3 py-1"
+          >
+            Deny
+          </button>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-red-700">
+          {error}
+        </p>
       )}
     </details>
   );
