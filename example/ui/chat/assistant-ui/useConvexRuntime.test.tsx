@@ -54,8 +54,6 @@ const mutation = (ref: Parameters<typeof getFunctionName>[0]) =>
   mocks.mutations.get(getFunctionName(ref))!;
 const sendMessage = () => mutation(api.chat.approval.sendMessage);
 const submitApproval = () => mutation(api.chat.approval.submitApproval);
-const triggerContinuation = () =>
-  mutation(api.chat.approval.triggerContinuation);
 const abortStream = () => mutation(api.chat.streamAbort.abortStreamByOrder);
 
 const assistant = (overrides: Partial<UIMessage> = {}): UIMessage => ({
@@ -107,7 +105,6 @@ beforeEach(() => {
   for (const ref of [
     api.chat.approval.sendMessage,
     api.chat.approval.submitApproval,
-    api.chat.approval.triggerContinuation,
     api.chat.streamAbort.abortStreamByOrder,
   ]) {
     mocks.mutations.set(getFunctionName(ref), vi.fn());
@@ -206,7 +203,7 @@ describe("useConvexRuntime", () => {
     expect(composer.getState().canSend).toBe(true);
   });
 
-  it("continues generation once every approval in the step is answered", async () => {
+  it("submits each approval decision", async () => {
     mocks.messages = [awaitingApprovals];
     submitApproval()
       .mockResolvedValueOnce({ messageId: "response-1" })
@@ -221,7 +218,6 @@ describe("useConvexRuntime", () => {
       approvalId: "approval-1",
       approved: true,
     });
-    expect(triggerContinuation()).not.toHaveBeenCalled();
 
     await act(() =>
       toolPart(result, "call-2").respondToToolApproval({
@@ -234,10 +230,6 @@ describe("useConvexRuntime", () => {
       approvalId: "approval-2",
       approved: false,
       reason: "Too much",
-    });
-    expect(triggerContinuation()).toHaveBeenCalledExactlyOnceWith({
-      threadId: "thread-1",
-      lastApprovalMessageId: "response-2",
     });
   });
 
@@ -291,7 +283,7 @@ describe("useConvexRuntime", () => {
     expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(1);
   });
 
-  it("does not continue when an approval fails to save", async () => {
+  it("surfaces an approval that fails to save", async () => {
     mocks.messages = [
       assistant({ parts: awaitingApprovals.parts.slice(0, 1) }),
     ];
@@ -300,7 +292,6 @@ describe("useConvexRuntime", () => {
     await expect(
       toolPart(result, "call-1").respondToToolApproval({ approved: true }),
     ).rejects.toThrow("Not allowed");
-    expect(triggerContinuation()).not.toHaveBeenCalled();
   });
 
   it("enables Stop once the latest assistant message streams, and aborts it by order", () => {

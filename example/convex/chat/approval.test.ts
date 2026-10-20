@@ -60,6 +60,15 @@ describe("submitApproval", () => {
     expect(await scheduled()).toEqual([continuation(threadId, messageId)]);
   });
 
+  test("continues when a step's decisions fill the lookup window", async () => {
+    const ids = Array.from({ length: 100 }, (_, i) => `a${i}`);
+    const { threadId, decide, scheduled } = await setup(ids);
+    for (const id of ids.slice(0, -1)) await decide(id);
+    expect(await scheduled()).toEqual([]);
+    const { messageId } = await decide(ids.at(-1)!);
+    expect(await scheduled()).toEqual([continuation(threadId, messageId)]);
+  }, 30_000);
+
   test("continues after a single decision", async () => {
     const { threadId, decide, scheduled } = await setup(["a"]);
     const { messageId } = await decide("a");

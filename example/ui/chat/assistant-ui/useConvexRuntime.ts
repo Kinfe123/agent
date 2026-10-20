@@ -7,7 +7,6 @@ import {
   useUIMessages,
 } from "@convex-dev/agent/react";
 import { useMutation } from "convex/react";
-import { useRef } from "react";
 import { api } from "../../../convex/_generated/api";
 import { convertMessage, pendingApprovalIds } from "./convertMessage";
 
@@ -23,11 +22,7 @@ export function useConvexRuntime(threadId: string) {
     optimisticallySendMessage(api.chat.approval.listThreadMessages),
   );
   const submitApproval = useMutation(api.chat.approval.submitApproval);
-  const triggerContinuation = useMutation(
-    api.chat.approval.triggerContinuation,
-  );
   const abortStream = useMutation(api.chat.streamAbort.abortStreamByOrder);
-  const answeredApprovals = useRef(new Set<string>());
   const latest = results.findLast((message) => message.role === "assistant");
   const pendingApprovals = pendingApprovalIds(latest);
 
@@ -51,21 +46,7 @@ export function useConvexRuntime(threadId: string) {
       }
     },
     onRespondToToolApproval: async ({ approvalId, approved, reason }) => {
-      const { messageId } = await submitApproval({
-        threadId,
-        approvalId,
-        approved,
-        reason,
-      });
-      // Approvals in a step are answered one at a time; generation continues
-      // from the last response, once every request in the step has one.
-      answeredApprovals.current.add(approvalId);
-      if (pendingApprovals.every((id) => answeredApprovals.current.has(id))) {
-        await triggerContinuation({
-          threadId,
-          lastApprovalMessageId: messageId,
-        });
-      }
+      await submitApproval({ threadId, approvalId, approved, reason });
     },
     ...(latest?.status === "streaming"
       ? {

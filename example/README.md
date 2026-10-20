@@ -34,9 +34,9 @@ backend as the Tool Approval example (`convex/chat/approval.ts`).
 
 - `ui/chat/assistant-ui/useConvexRuntime.ts` connects `useUIMessages` to
   `useExternalStoreRuntime`. Sending runs `sendMessage` with
-  `optimisticallySendMessage`, approvals go through `submitApproval`, and once
-  every approval in a step is answered `triggerContinuation` resumes generation.
-  Stop calls `abortStreamByOrder`.
+  `optimisticallySendMessage`, and approvals go through `submitApproval`, which
+  resumes generation once every approval in the step is answered. Stop calls
+  `abortStreamByOrder`.
 - `ui/chat/assistant-ui/convertMessage.ts` maps `UIMessage` parts to
   assistant-ui parts, keyed by the message's stable `key`.
 - `ui/chat/assistant-ui/Thread.tsx` composes the UI from assistant-ui
