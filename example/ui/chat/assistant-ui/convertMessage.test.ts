@@ -126,4 +126,176 @@ describe("convertMessage", () => {
     expect(result.content).toEqual(message.parts);
     expect(result.status).toBeUndefined();
   });
+  it("maps each approval state to assistant-ui's approval gate", () => {
+    const input = { filename: "important.txt" };
+    const call = {
+      type: "tool-call",
+      toolCallId: "call-1",
+      toolName: "deleteFile",
+      argsText: '{"filename":"important.txt"}',
+    };
+    const result = convertMessage({
+      ...message,
+      status: "success",
+      parts: [
+        {
+          type: "tool-deleteFile",
+          toolCallId: "call-1",
+          state: "approval-requested",
+          input,
+          approval: { id: "approval-1" },
+        },
+      ],
+    });
+    expect(result.status).toEqual({
+      type: "requires-action",
+      reason: "tool-calls",
+    });
+    expect(result.content).toEqual([
+      { ...call, approval: { id: "approval-1" } },
+    ]);
+
+    expect(
+      convertMessage({
+        ...message,
+        status: "success",
+        parts: [
+          {
+            type: "tool-deleteFile",
+            toolCallId: "call-1",
+            state: "approval-responded",
+            input,
+            approval: { id: "approval-1", approved: true },
+          },
+        ],
+      }),
+    ).toMatchObject({
+      status: { type: "complete" },
+      content: [{ ...call, approval: { id: "approval-1", approved: true } }],
+    });
+
+    expect(
+      convertMessage({
+        ...message,
+        status: "success",
+        parts: [
+          {
+            type: "tool-deleteFile",
+            toolCallId: "call-1",
+            state: "output-available",
+            input,
+            output: "Deleted",
+            approval: { id: "approval-1", approved: true },
+          },
+        ],
+      }).content,
+    ).toEqual([
+      {
+        ...call,
+        approval: { id: "approval-1", approved: true },
+        result: "Deleted",
+      },
+    ]);
+  });
+
+  it("reports a denied tool call as an error carrying the reason", () => {
+    const denied = (reason?: string) =>
+      convertMessage({
+        ...message,
+        status: "success",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "deleteFile",
+            toolCallId: "call-1",
+            state: "output-denied",
+            input: {},
+            approval: { id: "approval-1", approved: false, reason },
+          },
+        ],
+      }).content;
+    expect(denied("Keep that file")).toEqual([
+      {
+        type: "tool-call",
+        toolCallId: "call-1",
+        toolName: "deleteFile",
+        argsText: "{}",
+        approval: {
+          id: "approval-1",
+          approved: false,
+          reason: "Keep that file",
+        },
+        result: { error: "Keep that file" },
+        isError: true,
+      },
+    ]);
+    expect(denied()).toMatchObject([
+      { result: { error: "Tool approval denied" }, isError: true },
+    ]);
+  });
+
+  it("maps sources, files, and data parts, and drops parts with no equivalent", () => {
+    expect(
+      convertMessage({
+        ...message,
+        status: "success",
+        parts: [
+          { type: "step-start" },
+          {
+            type: "source-url",
+            sourceId: "s-1",
+            url: "https://docs.convex.dev",
+            title: "Docs",
+          },
+          {
+            type: "source-document",
+            sourceId: "s-2",
+            mediaType: "application/pdf",
+            title: "Spec",
+          },
+          {
+            type: "file",
+            mediaType: "image/png",
+            url: "https://example.com/a.png",
+          },
+          {
+            type: "file",
+            mediaType: "text/plain",
+            url: "https://example.com/a.txt",
+            filename: "a.txt",
+          },
+          { type: "data-progress", data: { done: 1 } },
+          { type: "custom", kind: "provider.thing" },
+          {
+            type: "reasoning-file",
+            mediaType: "image/png",
+            url: "https://example.com/r.png",
+          },
+        ],
+      }).content,
+    ).toEqual([
+      {
+        type: "source",
+        sourceType: "url",
+        id: "s-1",
+        url: "https://docs.convex.dev",
+        title: "Docs",
+      },
+      {
+        type: "source",
+        sourceType: "document",
+        id: "s-2",
+        mediaType: "application/pdf",
+        title: "Spec",
+      },
+      { type: "image", image: "https://example.com/a.png" },
+      {
+        type: "file",
+        data: "https://example.com/a.txt",
+        mimeType: "text/plain",
+        filename: "a.txt",
+      },
+      { type: "data-progress", data: { done: 1 } },
+    ]);
+  });
 });
